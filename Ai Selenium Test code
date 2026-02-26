@@ -1,0 +1,85 @@
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Properties;
+
+public class Config {
+    public static String getApiKey() {
+        try {
+            Properties props = new Properties();
+            props.load(new FileInputStream("config.properties"));
+            return props.getProperty("OPENAI_API_KEY");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read API key from config file", e);
+        }
+    }
+}
+
+
+mport java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class GenerateTestFromStory {
+
+	public static void main(String[] args) {
+
+		String userStory = """
+				        As a registered user,
+				        I want to log in to the website with valid credentials
+				        so that I can access my dashboard.
+				        
+				        Acceptance Criteria:
+				        - Navigate to https://opensource-demo.orangehrmlive.com/
+				        - Verify the Page Title
+				        - Enter valid username and password
+				        - Verify successful login by checking dashboard visibility or Page Title
+				""";
+		
+		try {
+			System.out.println("Sending user story to AI...");
+			String generatedCode = OpenAIClientWrapper.generateCodeFromStory(userStory);
+			System.out.println("\nAI Generated Test Code:\n");
+			//System.out.println(generatedCode);
+			
+			// build timestamped filename and save
+			String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+			String fileName = "generated-tests/AI_GeneratedTest_" + ts + ".java";
+			OpenAIClientWrapper.saveToFile(generatedCode, fileName);
+			System.out.println("\nSaved generated File: " + fileName);
+			
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+	}
+}
+
+
+
+
+import com.openai.client.OpenAIClient;
+import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.responses.Response;
+import com.openai.models.responses.ResponseCreateParams;
+
+public class Main {
+    public static void main(String[] args) {
+    	
+    	//System.out.println("Key: " + System.getenv("OPENAI_API_KEY"));
+    	
+        // Create client from environment variables
+        OpenAIClient client = OpenAIOkHttpClient.fromEnv();
+
+        ResponseCreateParams params = ResponseCreateParams.builder()
+                .input("Hey, You are free to use the Internet. now tell me, what is the current time and temprature of New Jersey, Use city - Jersey City")
+                .model("gpt-5")
+                .build();
+
+        Response response = client.responses().create(params);
+        System.out.println(response.output());
+    }
+}
+
+
+
+port java.util.logging.Logger;import java.io.IOException;import java.nio.file.Files;import java.nio.file.Path;import java.nio.file.StandardOpenOption;import com.openai.client.OpenAIClient;import com.openai.client.okhttp.OpenAIOkHttpClient;import com.openai.models.chat.completions.ChatCompletion;import com.openai.models.chat.completions.ChatCompletionCreateParams;import com.openai.models.ChatModel;/** *  * This class connects to the OpenAI API to generate Selenium + TestNG Java test * cases automatically from user stories or requirements. */public class OpenAIClientWrapper {	private static final Logger LOGGER = Logger.getLogger(OpenAIClientWrapper.class.getName());	private static OpenAIClient client;	public OpenAIClientWrapper() {		String apiKey = Config.getApiKey();		if (apiKey == null || apiKey.isBlank()) {			throw new IllegalArgumentException("API key must not be blank");		}		this.client = OpenAIOkHttpClient.builder().apiKey(apiKey).build();		System.out.println(client);	}	private static void initClientIfNeeded() {		if (client == null) {			synchronized (OpenAIClientWrapper.class) {				if (client == null) {					String apiKey = Config.getApiKey();					if (apiKey == null || apiKey.isBlank()) {						throw new IllegalArgumentException("API key must not be blank");					}					// This is compatible with openai-java 4.6.1 style you used earlier					client = OpenAIOkHttpClient.builder().apiKey(apiKey).build();					LOGGER.info("OpenAI client initialized.");				}			}		}	}	// Generates Java source code for a Selenium + TestNG test based on the given	// user story.	public static String generateCodeFromStory(String userStory) throws IOException {		if (userStory == null || userStory.isBlank()) {			throw new IllegalArgumentException("userStory must not be blank");		}				initClientIfNeeded();		// Construct the system prompt		String systemPrompt = """				You are an expert Test Automation Engineer. Generate a clean, maintainable Selenium + TestNG test in Java.				Provide full Java source code with imports, class, method, ChromeDriver setup and teardown, descriptive naming, and assertions.				""";		// Create chat completion parameters		ChatCompletionCreateParams params = ChatCompletionCreateParams.builder().model(ChatModel.GPT_5)				.addSystemMessage(systemPrompt).addUserMessage("User Story / Acceptance Criteria:\n\n" + userStory)				.build();		// Call the API		ChatCompletion result = client.chat().completions().create(params);		// Extract content		String code = result.choices().get(0).message().content()				.orElseThrow(() -> new IOException("No content in OpenAI response"));		return code.trim();	}	// Saves the generated code to a .java file.	public static void saveToFile(String code, String fileName) throws IOException {		if (code == null || code.isBlank()) {			throw new IllegalArgumentException("code must not be blank");		}		if (fileName == null || fileName.isBlank()) {			throw new IllegalArgumentException("fileName must not be blank");		}		Path path = Path.of(fileName).toAbsolutePath();				 // Ensure parent directories exist		Path parent = path.getParent();		if (parent != null && !Files.exists(parent)) {	        Files.createDirectories(parent);	    }				Files.writeString(path, code, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);		LOGGER.info("Saved generated code to: " + path);	}}
+Collapse file‎ai-selenium-test-generator/src/main/java/SampleTestOpenAI.java‎Copy file name to clipboard+37Lines changed: 37 additions & 0 deletionsOriginal file line numberDiff line numberDiff line change@@ -0,0 +1,37 @@import com.openai.client.OpenAIClient;import com.openai.client.okhttp.OpenAIOkHttpClient;import com.openai.models.responses.Response;import com.openai.models.responses.ResponseCreateParams;import java.util.List;public class SampleTestOpenAI {	public static void main(String[] args) {		String apiKey = Config.getApiKey();		OpenAIClient client = OpenAIOkHttpClient.builder().apiKey(apiKey).build();						// Example user story to generate test cases from		String userStory = "As a registered user, I want to reset my password so that I can regain access if I forget it.";		// Build prompt: be explicit about required output format		String prompt = "You are a software QA engineer. Given the following user story, generate 3 test cases in Gherkin format (Given/When/Then).\n"				+ "Provide each test case with:\n" + "- Title\n" + "- Preconditions\n"				+ "- Steps in Gherkin (Given/When/Then)\n" + "- Expected result summary\n\n" + "User story:\n"				+ userStory				+ "\n\nRespond only with a JSON array of objects with fields: title, preconditions, gherkin, expected.\n";		ResponseCreateParams params = ResponseCreateParams.builder()				.input(prompt).model("gpt-4.1").build();		try {			Response response = client.responses().create(params);			// The SDK returns a Response object — print the model output(s)			System.out.println("Raw response object: " + response);		} catch (Exception e) {			System.err.println("Error calling OpenAI: " + e.getMessage());			e.printStackTrace();		}	}}
+Collapse file‎ai-selenium-test-generator/src/test/java/OrangeHRMLoginTest.java‎Copy file name to clipboard+89Lines changed: 89 additions & 0 deletionsOriginal file line numberDiff line numberDiff line change@@ -0,0 +1,89 @@import org.openqa.selenium.By;import org.openqa.selenium.WebDriver;import org.openqa.selenium.WebElement;import org.openqa.selenium.chrome.ChromeDriver;import org.openqa.selenium.chrome.ChromeOptions;import org.openqa.selenium.support.ui.ExpectedConditions;import org.openqa.selenium.support.ui.WebDriverWait;import org.testng.Assert;import org.testng.annotations.AfterClass;import org.testng.annotations.BeforeClass;import org.testng.annotations.Test;import java.time.Duration;public class OrangeHRMLoginTest {    private WebDriver driver;    private WebDriverWait wait;    private static final String BASE_URL = "https://opensource-demo.orangehrmlive.com/";    private static final String VALID_USERNAME = "Admin";    private static final String VALID_PASSWORD = "admin123";    private static final String EXPECTED_LOGIN_TITLE = "OrangeHRM";    // Locators    private static final By USERNAME_INPUT = By.name("username");    private static final By PASSWORD_INPUT = By.name("password");    private static final By LOGIN_BUTTON = By.cssSelector("button[type='submit']");    private static final By DASHBOARD_HEADER = By.cssSelector("h6.oxd-text.oxd-text--h6.oxd-topbar-header-breadcrumb-module");    @BeforeClass(alwaysRun = true)    public void setUp() {        // Selenium 4.6+ will manage the ChromeDriver binary automatically        ChromeOptions options = new ChromeOptions();        // options.addArguments("--headless=new"); // Uncomment for headless runs in CI        driver = new ChromeDriver(options);        wait = new WebDriverWait(driver, Duration.ofSeconds(10));        driver.manage().window().maximize();    }    @AfterClass(alwaysRun = true)    public void tearDown() {        if (driver != null) {            driver.quit();        }    }    @Test(description = "As a registered user, I can log in with valid credentials and access the dashboard")    public void userCanLoginWithValidCredentials() {        // Navigate to the application        driver.get(BASE_URL);        // Ensure login page is loaded        waitForVisible(USERNAME_INPUT);        // Verify the Page Title        String actualLoginTitle = driver.getTitle();        Assert.assertEquals(actualLoginTitle, EXPECTED_LOGIN_TITLE, "Login page title should match expected.");        // Enter valid username and password and submit        login(VALID_USERNAME, VALID_PASSWORD);        // Verify successful login by checking that the Dashboard is visible        WebElement dashboardHeading = waitForVisible(DASHBOARD_HEADER);        Assert.assertTrue(dashboardHeading.isDisplayed(), "Dashboard heading should be visible after login.");        Assert.assertEquals(dashboardHeading.getText().trim(), "Dashboard", "User should land on the Dashboard.");        // Optional: Also verify URL contains 'dashboard' and title remains consistent        Assert.assertTrue(driver.getCurrentUrl().toLowerCase().contains("dashboard"),                "Current URL should contain 'dashboard' after login.");        Assert.assertEquals(driver.getTitle(), EXPECTED_LOGIN_TITLE, "Page title remains consistent after login.");    }    // Helper methods    private void login(String username, String password) {        WebElement usernameField = waitForVisible(USERNAME_INPUT);        WebElement passwordField = waitForVisible(PASSWORD_INPUT);        usernameField.clear();        usernameField.sendKeys(username);        passwordField.clear();        passwordField.sendKeys(password);        driver.findElement(LOGIN_BUTTON).click();    }    private WebElement waitForVisible(By locator) {        return wait.until(ExpectedConditions.visibilityOfElementLocated(locator));    }}

@@ -1,0 +1,13 @@
+//Switichng to mutiple tabs
+   
+   //Current Tab
+   String mainTab = driver.getWindowHandle();
+
+        // Get all open tabs
+        Set<String> allTabs = driver.getWindowHandles();
+
+        // Switch to new tab
+        for (String tab : allTabs) {
+            if (!tab.equals(mainTab)) {
+                driver.switchTo().window(tab);
+                break;
