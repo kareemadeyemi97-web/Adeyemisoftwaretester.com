@@ -1,0 +1,39 @@
+DateTimeFormatter formatter =
+        DateTimeFormatter.ofPattern("MMM dd yyyy", Locale.ENGLISH);
+
+LocalDate targetDate =
+        LocalDate.parse("Feb 27 2026", formatter);
+
+int day = targetDate.getDayOfMonth();      // 27
+String month = targetDate.getMonth()
+        .getDisplayName(TextStyle.FULL, Locale.ENGLISH);  // February
+int year = targetDate.getYear();           // 2026
+
+
+// On calender page using page Object Model
+public void selectDateByText(String dateText) {
+
+    DateTimeFormatter formatter =
+            DateTimeFormatter.ofPattern("MMM dd yyyy", Locale.ENGLISH);
+
+    LocalDate targetDate =
+            LocalDate.parse(dateText, formatter);
+
+    int day = targetDate.getDayOfMonth();
+
+    String dynamicXpath =
+            "//td[normalize-space()='" + day + "']";
+
+    driver.findElement(By.xpath(dynamicXpath)).click();
+}
+
+// on Test enviroment 
+@Test
+public void bookAppointment() {
+
+    CalendarPage calendar = new CalendarPage(driver);
+
+    calendar.selectDateByText("Feb 27 2026");
+}
+
+
